@@ -31,10 +31,16 @@
 
     <!-- アップロード機能 -->
     <div id="uploadArea" class="hidden">
-        <input type="file" id="fileInput">
+        <h2>ファイルアップロード</h2>
+        <input type="file" id="fileInput"><br>
+        <input type="text" id="shareWith" placeholder="共有先のユーザー名 (空欄で自分のみ)"><br>
         <button onclick="uploadFile()">アップロード</button>
-        <h2>ファイル一覧</h2>
+
+        <h2>自分のファイル</h2>
         <ul id="fileList"></ul>
+
+        <h2>共有されたファイル</h2>
+        <ul id="sharedFileList"></ul>
     </div>
 
     <script>
@@ -115,12 +121,6 @@
             document.getElementById("uploadArea").classList.add("hidden");
         }
 
-        // アカウント作成フォームを表示
-        function showCreateAccountForm() {
-            document.getElementById("loginForm").classList.add("hidden");
-            document.getElementById("createAccountForm").classList.remove("hidden");
-        }
-
         // アップロード画面を表示
         function showUploadArea() {
             document.getElementById("loginForm").classList.add("hidden");
@@ -133,13 +133,14 @@
         function uploadFile() {
             const fileInput = document.getElementById("fileInput");
             const file = fileInput.files[0];
+            const shareWith = document.getElementById("shareWith").value.trim();
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = () => {
                 const transaction = db.transaction(["files"], "readwrite");
                 const store = transaction.objectStore("files");
-                store.put({ name: file.name, data: reader.result, owner: currentUser });
+                store.put({ name: file.name, data: reader.result, owner: currentUser, sharedWith: shareWith });
                 transaction.oncomplete = loadFiles;
             };
             reader.readAsDataURL(file);
@@ -148,7 +149,10 @@
         // ファイルの読み込み
         function loadFiles() {
             const fileList = document.getElementById("fileList");
+            const sharedFileList = document.getElementById("sharedFileList");
             fileList.innerHTML = "";
+            sharedFileList.innerHTML = "";
+
             const transaction = db.transaction(["files"], "readonly");
             const store = transaction.objectStore("files");
             const request = store.openCursor();
@@ -156,12 +160,17 @@
             request.onsuccess = event => {
                 const cursor = event.target.result;
                 if (cursor) {
-                    // 自分がアップロードしたファイルのみ表示
-                    if (cursor.value.owner === currentUser) {
-                        const li = document.createElement("li");
-                        li.innerHTML = `<a href="${cursor.value.data}" download="${cursor.value.name}">${cursor.value.name}</a>
-                                        <button onclick="deleteFile('${cursor.value.name}')">削除</button>`;
+                    const file = cursor.value;
+                    const li = document.createElement("li");
+
+                    if (file.owner === currentUser) {
+                        li.innerHTML = `<a href="${file.data}" download="${file.name}">${file.name}</a> 
+                                        <button onclick="deleteFile('${file.name}')">削除</button>`;
                         fileList.appendChild(li);
+                    } else if (file.sharedWith === currentUser) {
+                        li.innerHTML = `<a href="${file.data}" download="${file.name}">${file.name}</a> 
+                                        (提供者: ${file.owner})`;
+                        sharedFileList.appendChild(li);
                     }
                     cursor.continue();
                 }
