@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>クラウドストレージ</title>
+    <title>ストレージ</title>
 </head>
 <body>
-    <h1>クラウドストレージ</h1>
+    <h1>ストレージ</h1>
 
     <!-- ログインフォーム -->
     <div id="loginArea">
         <h2>ログイン</h2>
         <input type="email" id="email" placeholder="メールアドレス">
         <input type="password" id="password" placeholder="パスワード">
-        <button onclick="login()">ログイン</button>
-        <button onclick="signUp()">アカウント作成</button>
+        <button id="loginButton">ログイン</button>
+        <button id="signUpButton">アカウント作成</button>
     </div>
 
     <!-- アップロード機能 -->
@@ -36,7 +36,7 @@
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js";
         import { getStorage, ref, uploadBytes, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-storage.js";
 
-        // 🔹 ここに Firebase 設定を入力（Firebase コンソールから取得）
+        // Firebase 設定
         const firebaseConfig = {
             apiKey: "AIzaSyAwJKhjvzTOPqPOavrrpInIV1epb4W2Eoo",
             authDomain: "soramame72-storage.firebaseapp.com",
@@ -50,7 +50,7 @@
         const auth = getAuth(app);
         const storage = getStorage(app);
 
-        // 🔹 ユーザーのログイン状態を監視
+        // ユーザーのログイン状態を監視
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 document.getElementById("loginArea").style.display = "none";
@@ -62,7 +62,13 @@
             }
         });
 
-        // 🔹 アカウント作成
+        // アカウント作成
+        document.getElementById("signUpButton").addEventListener("click", signUp);
+
+        // ログイン
+        document.getElementById("loginButton").addEventListener("click", login);
+
+        // アカウント作成処理
         function signUp() {
             const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
@@ -72,7 +78,7 @@
                 .catch(error => alert("エラー: " + error.message));
         }
 
-        // 🔹 ログイン
+        // ログイン処理
         function login() {
             const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
@@ -82,12 +88,12 @@
                 .catch(error => alert("ログイン失敗: " + error.message));
         }
 
-        // 🔹 ログアウト
+        // ログアウト
         function logout() {
             signOut(auth).then(() => alert("ログアウトしました！"));
         }
 
-        // 🔹 ファイルアップロード
+        // ファイルアップロード
         function uploadFile() {
             const file = document.getElementById("fileInput").files[0];
             if (!file) return alert("ファイルを選択してください");
@@ -102,7 +108,7 @@
             }).catch(error => alert("アップロードエラー: " + error.message));
         }
 
-        // 🔹 ファイルリスト取得
+        // ファイルリスト取得
         function loadFileList() {
             const user = auth.currentUser;
             if (!user) return;
@@ -122,7 +128,7 @@
             }).catch(error => alert("ファイル取得エラー: " + error.message));
         }
 
-        // 🔹 ファイルURL取得
+        // ファイルURL取得
         function getFileURL() {
             const fileName = document.getElementById("fileName").value.trim();
             if (!fileName) return alert("ファイル名を入力してください");
