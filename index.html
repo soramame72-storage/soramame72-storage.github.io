@@ -3,156 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ストレージ</title>
-    <style>
-        .hidden { display: none; }
-    </style>
+    <title>クラウドストレージ</title>
 </head>
 <body>
-    <h1>ストレージ</h1>
-    
-    <div id="loginForm">
+    <h1>クラウドストレージ</h1>
+
+    <!-- ログインフォーム -->
+    <div id="loginArea">
         <h2>ログイン</h2>
-        <input type="text" id="loginUsername" placeholder="ユーザー名" required><br>
-        <input type="password" id="loginPassword" placeholder="パスワード" required><br>
-        <button id="loginButton">ログイン</button>
-        <button id="createAccountButton">アカウント作成</button>
+        <input type="email" id="email" placeholder="メールアドレス">
+        <input type="password" id="password" placeholder="パスワード">
+        <button onclick="login()">ログイン</button>
+        <button onclick="signUp()">アカウント作成</button>
     </div>
 
-    <div id="createAccountForm" class="hidden">
-        <h2>アカウント作成</h2>
-        <input type="text" id="createUsername" placeholder="新しいユーザー名" required><br>
-        <input type="password" id="createPassword" placeholder="新しいパスワード" required><br>
-        <button id="createAccountButtonAction">アカウント作成</button>
-        <button id="backToLoginButton">戻る</button>
-    </div>
-
-    <div id="uploadArea" class="hidden">
+    <!-- アップロード機能 -->
+    <div id="storageArea" style="display:none;">
         <h2>ファイルアップロード</h2>
-        <input type="file" id="fileInput"><br>
-        <input type="text" id="shareWith" placeholder="共有先のユーザー名 (カンマ区切り)"><br>
+        <input type="file" id="fileInput">
         <button onclick="uploadFile()">アップロード</button>
-        <button id="logoutButton">ログアウト</button>
-        
-        <h2>自分のファイル</h2>
-        <ul id="fileList"></ul>
+        <button onclick="logout()">ログアウト</button>
 
-        <h2>共有されたファイル</h2>
-        <ul id="sharedFileList"></ul>
+        <h2>ダウンロード</h2>
+        <input type="text" id="fileName" placeholder="ファイル名を入力">
+        <button onclick="getFileURL()">ダウンロード</button>
+
+        <ul id="fileList"></ul>
     </div>
 
-    <script>
-        let db;
-        let currentUser = null;
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-storage.js";
 
-        document.addEventListener("DOMContentLoaded", () => {
-            const dbRequest = indexedDB.open("CloudStorageDB", 1);
+        // 🔹 ここに Firebase 設定を入力（Firebase コンソールから取得）
+        const firebaseConfig = {
+            apiKey: "AIzaSyAwJKhjvzTOPqPOavrrpInIV1epb4W2Eoo",
+            authDomain: "soramame72-storage.firebaseapp.com",
+            projectId: "soramame72-storage",
+            storageBucket: "soramame72-storage.appspot.com",
+            messagingSenderId: "176925134959",
+            appId: "176925134959:web:505c741b0c67b0e49d3d9a"
+        };
 
-            dbRequest.onupgradeneeded = event => {
-                db = event.target.result;
-                if (!db.objectStoreNames.contains("users")) {
-                    db.createObjectStore("users", { keyPath: "username" });
-                }
-                if (!db.objectStoreNames.contains("files")) {
-                    db.createObjectStore("files", { keyPath: "name" });
-                }
-            };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const storage = getStorage(app);
 
-            dbRequest.onsuccess = event => {
-                db = event.target.result;
-            };
-
-            document.getElementById("loginButton").addEventListener("click", login);
-            document.getElementById("createAccountButton").addEventListener("click", () => {
-                toggleVisibility("createAccountForm", true);
-                toggleVisibility("loginForm", false);
-            });
-            document.getElementById("createAccountButtonAction").addEventListener("click", createAccount);
-            document.getElementById("backToLoginButton").addEventListener("click", () => {
-                toggleVisibility("loginForm", true);
-                toggleVisibility("createAccountForm", false);
-            });
-            document.getElementById("logoutButton").addEventListener("click", logout);
+        // 🔹 ユーザーのログイン状態を監視
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                document.getElementById("loginArea").style.display = "none";
+                document.getElementById("storageArea").style.display = "block";
+                loadFileList();
+            } else {
+                document.getElementById("loginArea").style.display = "block";
+                document.getElementById("storageArea").style.display = "none";
+            }
         });
 
-        function toggleVisibility(elementId, isVisible) {
-            document.getElementById(elementId).classList.toggle("hidden", !isVisible);
+        // 🔹 アカウント作成
+        function signUp() {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+
+            createUserWithEmailAndPassword(auth, email, password)
+                .then(() => alert("アカウント作成完了！"))
+                .catch(error => alert("エラー: " + error.message));
         }
 
-        async function hashPassword(password) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(password);
-            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+        // 🔹 ログイン
+        function login() {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+
+            signInWithEmailAndPassword(auth, email, password)
+                .then(() => alert("ログイン成功！"))
+                .catch(error => alert("ログイン失敗: " + error.message));
         }
 
-        async function createAccount() {
-            const username = document.getElementById("createUsername").value.trim();
-            const password = await hashPassword(document.getElementById("createPassword").value.trim());
-
-            const transaction = db.transaction(["users"], "readwrite");
-            const store = transaction.objectStore("users");
-            store.get(username).onsuccess = event => {
-                if (event.target.result) {
-                    alert("そのユーザー名は既に使われています");
-                } else {
-                    store.put({ username, password });
-                    alert("アカウントが作成されました");
-                    toggleVisibility("loginForm", true);
-                    toggleVisibility("createAccountForm", false);
-                }
-            };
-        }
-
-        async function login() {
-            const username = document.getElementById("loginUsername").value;
-            const password = await hashPassword(document.getElementById("loginPassword").value);
-
-            const transaction = db.transaction(["users"], "readonly");
-            const store = transaction.objectStore("users");
-            store.get(username).onsuccess = event => {
-                if (event.target.result?.password === password) {
-                    currentUser = username;
-                    toggleVisibility("uploadArea", true);
-                    toggleVisibility("loginForm", false);
-                    loadFiles();
-                } else {
-                    alert("ユーザー名またはパスワードが間違っています");
-                }
-            };
-        }
-
-        function uploadFile() {
-            const fileInput = document.getElementById("fileInput");
-            const file = fileInput.files[0];
-            const shareWith = document.getElementById("shareWith").value.split(",").map(s => s.trim());
-
-            if (!file) {
-                alert("ファイルを選択してください");
-                return;
-            }
-
-            const transaction = db.transaction(["files"], "readwrite");
-            const store = transaction.objectStore("files");
-            store.get(file.name).onsuccess = event => {
-                if (event.target.result) {
-                    if (!confirm("同名のファイルが存在します。上書きしますか？")) return;
-                }
-                
-                const reader = new FileReader();
-                reader.onload = () => {
-                    store.put({ name: file.name, data: reader.result, owner: currentUser, sharedWith: shareWith });
-                    alert("ファイルがアップロードされました");
-                    loadFiles();
-                };
-                reader.readAsDataURL(file);
-            };
-        }
-
+        // 🔹 ログアウト
         function logout() {
-            currentUser = null;
-            toggleVisibility("uploadArea", false);
-            toggleVisibility("loginForm", true);
+            signOut(auth).then(() => alert("ログアウトしました！"));
+        }
+
+        // 🔹 ファイルアップロード
+        function uploadFile() {
+            const file = document.getElementById("fileInput").files[0];
+            if (!file) return alert("ファイルを選択してください");
+
+            const user = auth.currentUser;
+            if (!user) return alert("ログインしてください");
+
+            const storageRef = ref(storage, `uploads/${user.uid}/${file.name}`);
+            uploadBytes(storageRef, file).then(() => {
+                alert("アップロード完了！");
+                loadFileList();
+            }).catch(error => alert("アップロードエラー: " + error.message));
+        }
+
+        // 🔹 ファイルリスト取得
+        function loadFileList() {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const listRef = ref(storage, `uploads/${user.uid}`);
+            listAll(listRef).then(res => {
+                const fileList = document.getElementById("fileList");
+                fileList.innerHTML = "";
+                res.items.forEach(fileRef => {
+                    fileRef.fullPath;
+                    getDownloadURL(fileRef).then(url => {
+                        const li = document.createElement("li");
+                        li.innerHTML = `<a href="${url}" target="_blank">${fileRef.name}</a>`;
+                        fileList.appendChild(li);
+                    });
+                });
+            }).catch(error => alert("ファイル取得エラー: " + error.message));
+        }
+
+        // 🔹 ファイルURL取得
+        function getFileURL() {
+            const fileName = document.getElementById("fileName").value.trim();
+            if (!fileName) return alert("ファイル名を入力してください");
+
+            const user = auth.currentUser;
+            if (!user) return alert("ログインしてください");
+
+            const fileRef = ref(storage, `uploads/${user.uid}/${fileName}`);
+            getDownloadURL(fileRef).then(url => {
+                window.open(url, "_blank");
+            }).catch(error => alert("ファイルが見つかりません: " + error.message));
         }
     </script>
 </body>
