@@ -3,40 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ユーザーログイン & ファイルアップローダー</title>
+    <title>ユーザー認証 & ファイルアップロード</title>
+    <style>
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
-    <h1>GitHub Pages のファイルを GoFile.io にアップロード</h1>
+    <!-- ログイン / 新規登録 画面 -->
+    <div id="authPage">
+        <h1>ログイン / 新規登録</h1>
+        <input type="text" id="username" placeholder="ユーザー名">
+        <input type="password" id="password" placeholder="パスワード">
+        <button id="registerBtn">新規登録</button>
+        <button id="loginBtn">ログイン</button>
+        <p id="authStatus"></p>
+    </div>
 
-    <h2>ユーザー認証</h2>
-    <input type="text" id="username" placeholder="ユーザー名">
-    <input type="password" id="password" placeholder="パスワード">
-    <button onclick="register()">新規登録</button>
-    <button onclick="login()">ログイン</button>
-    <p id="authStatus"></p>
+    <!-- ファイルアップロード画面 -->
+    <div id="uploadPage" class="hidden">
+        <h1>ファイルアップローダー</h1>
+        <button id="logoutBtn">ログアウト</button>
+        
+        <h2>アップロード</h2>
+        <input type="text" id="fileUrl" value="https://soramame72-storage.github.io/sample.jpg" size="50">
+        <button id="uploadBtn">アップロード開始</button>
+        <p id="status"></p>
 
-    <h2>アップロード</h2>
-    <input type="text" id="fileUrl" value="https://soramame72-storage.github.io/sample.jpg" size="50">
-    <button onclick="startUpload()">アップロード開始</button>
-    <p id="status"></p>
-
-    <h2>アップロード済みファイル</h2>
-    <ul id="fileList"></ul>
+        <h2>アップロード済みファイル</h2>
+        <ul id="fileList"></ul>
+    </div>
 
     <script type="module">
-        // Firebase SDK 読み込み
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // Firebase 設定
         const firebaseConfig = {
-            apiKey: "AIzaSyAwJKhjvzTOPqPOavrrpInIV1epb4W2Eoo",
-            authDomain: "soramame72-storage.firebaseapp.com",
-            projectId: "soramame72-storage",
-            storageBucket: "soramame72-storage.appspot.com",
-            messagingSenderId: "176925134959",
-            appId: "1:176925134959:web:505c741b0c67b0e49d3d9a"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
         // Firebase 初期化
@@ -44,52 +53,43 @@
         const auth = getAuth();
         const db = getFirestore();
 
-        // ユーザー登録
-        async function register() {
+        // 要素取得
+        const authPage = document.getElementById("authPage");
+        const uploadPage = document.getElementById("uploadPage");
+        const authStatus = document.getElementById("authStatus");
+        const fileList = document.getElementById("fileList");
+        const status = document.getElementById("status");
+
+        document.getElementById("registerBtn").addEventListener("click", async () => {
             const username = document.getElementById("username").value;
             const password = document.getElementById("password").value;
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, username + "@example.com", password);
-                const user = userCredential.user;
-                await setDoc(doc(db, "users", user.uid), { username, files: [] });
-                document.getElementById("authStatus").innerText = "登録完了！";
+                await setDoc(doc(db, "users", userCredential.user.uid), { username, files: [] });
+                authStatus.innerText = "登録完了！ログインしてください。";
             } catch (error) {
-                document.getElementById("authStatus").innerText = "エラー: " + error.message;
+                authStatus.innerText = "エラー: " + error.message;
             }
-        }
+        });
 
-        // ログイン
-        async function login() {
+        document.getElementById("loginBtn").addEventListener("click", async () => {
             const username = document.getElementById("username").value;
             const password = document.getElementById("password").value;
             try {
                 const userCredential = await signInWithEmailAndPassword(auth, username + "@example.com", password);
-                document.getElementById("authStatus").innerText = "ログイン成功！";
-                loadUserFiles(userCredential.user.uid);
+                authStatus.innerText = "ログイン成功！";
             } catch (error) {
-                document.getElementById("authStatus").innerText = "エラー: " + error.message;
+                authStatus.innerText = "エラー: " + error.message;
             }
-        }
+        });
 
-        // ユーザーごとのファイルを読み込む
-        async function loadUserFiles(userId) {
-            const userDoc = await getDoc(doc(db, "users", userId));
-            if (userDoc.exists()) {
-                const files = userDoc.data().files;
-                const fileList = document.getElementById("fileList");
-                fileList.innerHTML = "";
-                files.forEach(file => {
-                    const li = document.createElement("li");
-                    li.innerHTML = `<a href="${file}" target="_blank">${file}</a>`;
-                    fileList.appendChild(li);
-                });
-            }
-        }
+        document.getElementById("logoutBtn").addEventListener("click", async () => {
+            await signOut(auth);
+        });
 
-        // ファイルを GoFile.io にアップロード
-        async function startUpload() {
+        document.getElementById("uploadBtn").addEventListener("click", async () => {
             const fileUrl = document.getElementById("fileUrl").value;
-            document.getElementById("status").innerText = "アップロード中...";
+            status.innerText = "アップロード中...";
 
             try {
                 const response = await fetch(fileUrl);
@@ -112,19 +112,36 @@
                         });
                         loadUserFiles(user.uid);
                     }
-                    document.getElementById("status").innerHTML = `アップロード完了！<br><a href="${result.data.downloadPage}" target="_blank">ダウンロードリンク</a>`;
+                    status.innerHTML = `アップロード完了！<br><a href="${result.data.downloadPage}" target="_blank">ダウンロードリンク</a>`;
                 } else {
-                    document.getElementById("status").innerText = "アップロード失敗";
+                    status.innerText = "アップロード失敗";
                 }
             } catch (error) {
-                document.getElementById("status").innerText = "エラーが発生しました";
+                status.innerText = "エラーが発生しました";
+            }
+        });
+
+        async function loadUserFiles(userId) {
+            const userDoc = await getDoc(doc(db, "users", userId));
+            if (userDoc.exists()) {
+                const files = userDoc.data().files;
+                fileList.innerHTML = "";
+                files.forEach(file => {
+                    const li = document.createElement("li");
+                    li.innerHTML = `<a href="${file}" target="_blank">${file}</a>`;
+                    fileList.appendChild(li);
+                });
             }
         }
 
-        // ログイン状態の監視
         onAuthStateChanged(auth, (user) => {
             if (user) {
+                authPage.classList.add("hidden");
+                uploadPage.classList.remove("hidden");
                 loadUserFiles(user.uid);
+            } else {
+                authPage.classList.remove("hidden");
+                uploadPage.classList.add("hidden");
             }
         });
 
