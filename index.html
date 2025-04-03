@@ -11,7 +11,6 @@
 <body>
     <h1>ストレージ</h1>
     
-    <!-- ログインフォーム -->
     <div id="loginForm">
         <h2>ログイン</h2>
         <input type="text" id="loginUsername" placeholder="ユーザー名" required><br>
@@ -20,7 +19,6 @@
         <button id="createAccountButton">アカウント作成</button>
     </div>
 
-    <!-- 新規アカウント作成フォーム -->
     <div id="createAccountForm" class="hidden">
         <h2>アカウント作成</h2>
         <input type="text" id="createUsername" placeholder="新しいユーザー名" required><br>
@@ -29,13 +27,13 @@
         <button id="backToLoginButton">戻る</button>
     </div>
 
-    <!-- アップロード機能 -->
     <div id="uploadArea" class="hidden">
         <h2>ファイルアップロード</h2>
         <input type="file" id="fileInput"><br>
-        <input type="text" id="shareWith" placeholder="共有先のユーザー名 (空欄で自分のみ)"><br>
+        <input type="text" id="shareWith" placeholder="共有先のユーザー名 (カンマ区切り)"><br>
         <button onclick="uploadFile()">アップロード</button>
-
+        <button id="logoutButton">ログアウト</button>
+        
         <h2>自分のファイル</h2>
         <ul id="fileList"></ul>
 
@@ -64,12 +62,6 @@
                 db = event.target.result;
             };
 
-            dbRequest.onerror = event => {
-                console.error("IndexedDBの初期化に失敗しました", event.target.error);
-                alert("データベースの初期化中に問題が発生しました");
-            };
-
-            // イベントリスナー設定
             document.getElementById("loginButton").addEventListener("click", login);
             document.getElementById("createAccountButton").addEventListener("click", () => {
                 toggleVisibility("createAccountForm", true);
@@ -80,54 +72,28 @@
                 toggleVisibility("loginForm", true);
                 toggleVisibility("createAccountForm", false);
             });
+            document.getElementById("logoutButton").addEventListener("click", logout);
         });
 
         function toggleVisibility(elementId, isVisible) {
-            const element = document.getElementById(elementId);
-            element.classList.toggle("hidden", !isVisible);
+            document.getElementById(elementId).classList.toggle("hidden", !isVisible);
         }
 
-        function login() {
-            const username = document.getElementById("loginUsername").value;
-            const password = document.getElementById("loginPassword").value;
-            
-            const transaction = db.transaction(["users"], "readonly");
-            const store = transaction.objectStore("users");
-            const request = store.get(username);
-            
-            request.onsuccess = event => {
-                const user = event.target.result;
-                if (user && user.password === password) {
-                    currentUser = username;
-                    toggleVisibility("uploadArea", true);
-                    toggleVisibility("loginForm", false);
-                    loadFiles();
-                } else {
-                    alert("ユーザー名またはパスワードが間違っています");
-                }
-            };
-
-            transaction.onerror = event => {
-                console.error("ログイン中にエラーが発生しました", event.target.error);
-            };
+        async function hashPassword(password) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(password);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
         }
 
-        function createAccount() {
+        async function createAccount() {
             const username = document.getElementById("createUsername").value.trim();
-            const password = document.getElementById("createPassword").value.trim();
-
-            if (!username || !password) {
-                alert("ユーザー名とパスワードを入力してください");
-                return;
-            }
+            const password = await hashPassword(document.getElementById("createPassword").value.trim());
 
             const transaction = db.transaction(["users"], "readwrite");
             const store = transaction.objectStore("users");
-            const request = store.get(username);
-
-            request.onsuccess = event => {
-                const existingUser = event.target.result;
-                if (existingUser) {
+            store.get(username).onsuccess = event => {
+                if (event.target.result) {
                     alert("そのユーザー名は既に使われています");
                 } else {
                     store.put({ username, password });
@@ -136,88 +102,57 @@
                     toggleVisibility("createAccountForm", false);
                 }
             };
+        }
 
-            transaction.onerror = event => {
-                console.error("アカウント作成中に問題が発生しました", event.target.error);
+        async function login() {
+            const username = document.getElementById("loginUsername").value;
+            const password = await hashPassword(document.getElementById("loginPassword").value);
+
+            const transaction = db.transaction(["users"], "readonly");
+            const store = transaction.objectStore("users");
+            store.get(username).onsuccess = event => {
+                if (event.target.result?.password === password) {
+                    currentUser = username;
+                    toggleVisibility("uploadArea", true);
+                    toggleVisibility("loginForm", false);
+                    loadFiles();
+                } else {
+                    alert("ユーザー名またはパスワードが間違っています");
+                }
             };
         }
 
         function uploadFile() {
             const fileInput = document.getElementById("fileInput");
             const file = fileInput.files[0];
-            const shareWith = document.getElementById("shareWith").value.trim();
+            const shareWith = document.getElementById("shareWith").value.split(",").map(s => s.trim());
 
             if (!file) {
                 alert("ファイルを選択してください");
                 return;
             }
 
-            const reader = new FileReader();
-            reader.onload = () => {
-                const transaction = db.transaction(["files"], "readwrite");
-                const store = transaction.objectStore("files");
-                store.put({ name: file.name, data: reader.result, owner: currentUser, sharedWith: shareWith });
-
-                transaction.oncomplete = () => {
+            const transaction = db.transaction(["files"], "readwrite");
+            const store = transaction.objectStore("files");
+            store.get(file.name).onsuccess = event => {
+                if (event.target.result) {
+                    if (!confirm("同名のファイルが存在します。上書きしますか？")) return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = () => {
+                    store.put({ name: file.name, data: reader.result, owner: currentUser, sharedWith: shareWith });
                     alert("ファイルがアップロードされました");
                     loadFiles();
                 };
-
-                transaction.onerror = event => {
-                    console.error("ファイルアップロード中にエラーが発生しました", event.target.error);
-                };
-            };
-
-            reader.readAsDataURL(file);
-        }
-
-        function loadFiles() {
-            const fileList = document.getElementById("fileList");
-            const sharedFileList = document.getElementById("sharedFileList");
-            fileList.innerHTML = "";
-            sharedFileList.innerHTML = "";
-
-            const transaction = db.transaction(["files"], "readonly");
-            const store = transaction.objectStore("files");
-            const request = store.openCursor();
-
-            request.onsuccess = event => {
-                const cursor = event.target.result;
-                if (cursor) {
-                    const file = cursor.value;
-                    const li = document.createElement("li");
-
-                    if (file.owner === currentUser) {
-                        li.innerHTML = `<a href="${file.data}" download="${file.name}">${file.name}</a> 
-                                        <button onclick="deleteFile('${file.name}')">削除</button>`;
-                        fileList.appendChild(li);
-                    } else if (file.sharedWith === currentUser) {
-                        li.innerHTML = `<a href="${file.data}" download="${file.name}">${file.name}</a> 
-                                        (提供者: ${file.owner})`;
-                        sharedFileList.appendChild(li);
-                    }
-                    cursor.continue();
-                }
-            };
-
-            transaction.onerror = event => {
-                console.error("ファイル読み込み中に問題が発生しました", event.target.error);
+                reader.readAsDataURL(file);
             };
         }
 
-        function deleteFile(filename) {
-            const transaction = db.transaction(["files"], "readwrite");
-            const store = transaction.objectStore("files");
-            store.delete(filename);
-
-            transaction.oncomplete = () => {
-                alert("ファイルが削除されました");
-                loadFiles();
-            };
-
-            transaction.onerror = event => {
-                console.error("ファイル削除中にエラーが発生しました", event.target.error);
-            };
+        function logout() {
+            currentUser = null;
+            toggleVisibility("uploadArea", false);
+            toggleVisibility("loginForm", true);
         }
     </script>
 </body>
