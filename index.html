@@ -21,8 +21,8 @@
     <div id="storageArea" style="display:none;">
         <h2>ファイルアップロード</h2>
         <input type="file" id="fileInput">
-        <button onclick="uploadFile()">アップロード</button>
-        <button onclick="logout()">ログアウト</button>
+        <button id="uploadButton">アップロード</button>
+        <button id="logoutButton">ログアウト</button>
 
         <h2>ダウンロード</h2>
         <input type="text" id="fileName" placeholder="ファイル名を入力">
@@ -62,13 +62,13 @@
             }
         });
 
-        // アカウント作成
+        // イベントリスナーを使ってボタンに処理を追加
         document.getElementById("signUpButton").addEventListener("click", signUp);
-
-        // ログイン
         document.getElementById("loginButton").addEventListener("click", login);
+        document.getElementById("uploadButton").addEventListener("click", uploadFile);
+        document.getElementById("logoutButton").addEventListener("click", logout);
 
-        // アカウント作成処理
+        // アカウント作成
         function signUp() {
             const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
@@ -88,9 +88,13 @@
                 .catch(error => alert("ログイン失敗: " + error.message));
         }
 
-        // ログアウト
+        // ログアウト処理
         function logout() {
-            signOut(auth).then(() => alert("ログアウトしました！"));
+            signOut(auth).then(() => {
+                alert("ログアウトしました！");
+                document.getElementById("storageArea").style.display = "none";
+                document.getElementById("loginArea").style.display = "block";
+            });
         }
 
         // ファイルアップロード
@@ -118,7 +122,6 @@
                 const fileList = document.getElementById("fileList");
                 fileList.innerHTML = "";
                 res.items.forEach(fileRef => {
-                    fileRef.fullPath;
                     getDownloadURL(fileRef).then(url => {
                         const li = document.createElement("li");
                         li.innerHTML = `<a href="${url}" target="_blank">${fileRef.name}</a>`;
