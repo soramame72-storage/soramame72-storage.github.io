@@ -3,147 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ストレージ</title>
+    <title>ユーザーログイン & ファイルアップローダー</title>
 </head>
 <body>
-    <h1>ストレージ</h1>
+    <h1>GitHub Pages のファイルを GoFile.io にアップロード</h1>
 
-    <!-- ログインフォーム -->
-    <div id="loginArea">
-        <h2>ログイン</h2>
-        <input type="email" id="email" placeholder="メールアドレス">
-        <input type="password" id="password" placeholder="パスワード">
-        <button id="loginButton">ログイン</button>
-        <button id="signUpButton">アカウント作成</button>
-    </div>
+    <h2>ユーザー認証</h2>
+    <input type="text" id="username" placeholder="ユーザー名">
+    <input type="password" id="password" placeholder="パスワード">
+    <button onclick="register()">新規登録</button>
+    <button onclick="login()">ログイン</button>
+    <p id="authStatus"></p>
 
-    <!-- アップロード機能 -->
-    <div id="storageArea" style="display:none;">
-        <h2>ファイルアップロード</h2>
-        <input type="file" id="fileInput">
-        <button id="uploadButton">アップロード</button>
-        <button id="logoutButton">ログアウト</button>
+    <h2>アップロード</h2>
+    <input type="text" id="fileUrl" value="https://soramame72-storage.github.io/sample.jpg" size="50">
+    <button onclick="startUpload()">アップロード開始</button>
+    <p id="status"></p>
 
-        <h2>ダウンロード</h2>
-        <input type="text" id="fileName" placeholder="ファイル名を入力">
-        <button onclick="getFileURL()">ダウンロード</button>
-
-        <ul id="fileList"></ul>
-    </div>
+    <h2>アップロード済みファイル</h2>
+    <ul id="fileList"></ul>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js";
-        import { getStorage, ref, uploadBytes, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-storage.js";
+        // Firebase SDK 読み込み
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // Firebase 設定
         const firebaseConfig = {
-            apiKey: "AIzaSyAwJKhjvzTOPqPOavrrpInIV1epb4W2Eoo",
-            authDomain: "soramame72-storage.firebaseapp.com",
-            projectId: "soramame72-storage",
-            storageBucket: "soramame72-storage.appspot.com",
-            messagingSenderId: "176925134959",
-            appId: "176925134959:web:505c741b0c67b0e49d3d9a"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
+        // Firebase 初期化
         const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const storage = getStorage(app);
+        const auth = getAuth();
+        const db = getFirestore();
 
-        // ユーザーのログイン状態を監視
+        // ユーザー登録
+        async function register() {
+            const username = document.getElementById("username").value;
+            const password = document.getElementById("password").value;
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, username + "@example.com", password);
+                const user = userCredential.user;
+                await setDoc(doc(db, "users", user.uid), { username, files: [] });
+                document.getElementById("authStatus").innerText = "登録完了！";
+            } catch (error) {
+                document.getElementById("authStatus").innerText = "エラー: " + error.message;
+            }
+        }
+
+        // ログイン
+        async function login() {
+            const username = document.getElementById("username").value;
+            const password = document.getElementById("password").value;
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, username + "@example.com", password);
+                document.getElementById("authStatus").innerText = "ログイン成功！";
+                loadUserFiles(userCredential.user.uid);
+            } catch (error) {
+                document.getElementById("authStatus").innerText = "エラー: " + error.message;
+            }
+        }
+
+        // ユーザーごとのファイルを読み込む
+        async function loadUserFiles(userId) {
+            const userDoc = await getDoc(doc(db, "users", userId));
+            if (userDoc.exists()) {
+                const files = userDoc.data().files;
+                const fileList = document.getElementById("fileList");
+                fileList.innerHTML = "";
+                files.forEach(file => {
+                    const li = document.createElement("li");
+                    li.innerHTML = `<a href="${file}" target="_blank">${file}</a>`;
+                    fileList.appendChild(li);
+                });
+            }
+        }
+
+        // ファイルを GoFile.io にアップロード
+        async function startUpload() {
+            const fileUrl = document.getElementById("fileUrl").value;
+            document.getElementById("status").innerText = "アップロード中...";
+
+            try {
+                const response = await fetch(fileUrl);
+                const blob = await response.blob();
+                const formData = new FormData();
+                formData.append("file", blob, "uploaded_file.jpg");
+
+                const serverRes = await fetch("https://api.gofile.io/getServer");
+                const { data } = await serverRes.json();
+                const uploadUrl = `https://${data.server}.gofile.io/uploadFile`;
+
+                const goFileResponse = await fetch(uploadUrl, { method: "POST", body: formData });
+                const result = await goFileResponse.json();
+
+                if (result.status === "ok") {
+                    const user = auth.currentUser;
+                    if (user) {
+                        await updateDoc(doc(db, "users", user.uid), {
+                            files: arrayUnion(result.data.downloadPage)
+                        });
+                        loadUserFiles(user.uid);
+                    }
+                    document.getElementById("status").innerHTML = `アップロード完了！<br><a href="${result.data.downloadPage}" target="_blank">ダウンロードリンク</a>`;
+                } else {
+                    document.getElementById("status").innerText = "アップロード失敗";
+                }
+            } catch (error) {
+                document.getElementById("status").innerText = "エラーが発生しました";
+            }
+        }
+
+        // ログイン状態の監視
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                document.getElementById("loginArea").style.display = "none";
-                document.getElementById("storageArea").style.display = "block";
-                loadFileList();
-            } else {
-                document.getElementById("loginArea").style.display = "block";
-                document.getElementById("storageArea").style.display = "none";
+                loadUserFiles(user.uid);
             }
         });
 
-        // イベントリスナーを使ってボタンに処理を追加
-        document.getElementById("signUpButton").addEventListener("click", signUp);
-        document.getElementById("loginButton").addEventListener("click", login);
-        document.getElementById("uploadButton").addEventListener("click", uploadFile);
-        document.getElementById("logoutButton").addEventListener("click", logout);
-
-        // アカウント作成
-        function signUp() {
-            const email = document.getElementById("email").value;
-            const password = document.getElementById("password").value;
-
-            createUserWithEmailAndPassword(auth, email, password)
-                .then(() => alert("アカウント作成完了！"))
-                .catch(error => alert("エラー: " + error.message));
-        }
-
-        // ログイン処理
-        function login() {
-            const email = document.getElementById("email").value;
-            const password = document.getElementById("password").value;
-
-            signInWithEmailAndPassword(auth, email, password)
-                .then(() => alert("ログイン成功！"))
-                .catch(error => alert("ログイン失敗: " + error.message));
-        }
-
-        // ログアウト処理
-        function logout() {
-            signOut(auth).then(() => {
-                alert("ログアウトしました！");
-                document.getElementById("storageArea").style.display = "none";
-                document.getElementById("loginArea").style.display = "block";
-            });
-        }
-
-        // ファイルアップロード
-        function uploadFile() {
-            const file = document.getElementById("fileInput").files[0];
-            if (!file) return alert("ファイルを選択してください");
-
-            const user = auth.currentUser;
-            if (!user) return alert("ログインしてください");
-
-            const storageRef = ref(storage, `uploads/${user.uid}/${file.name}`);
-            uploadBytes(storageRef, file).then(() => {
-                alert("アップロード完了！");
-                loadFileList();
-            }).catch(error => alert("アップロードエラー: " + error.message));
-        }
-
-        // ファイルリスト取得
-        function loadFileList() {
-            const user = auth.currentUser;
-            if (!user) return;
-
-            const listRef = ref(storage, `uploads/${user.uid}`);
-            listAll(listRef).then(res => {
-                const fileList = document.getElementById("fileList");
-                fileList.innerHTML = "";
-                res.items.forEach(fileRef => {
-                    getDownloadURL(fileRef).then(url => {
-                        const li = document.createElement("li");
-                        li.innerHTML = `<a href="${url}" target="_blank">${fileRef.name}</a>`;
-                        fileList.appendChild(li);
-                    });
-                });
-            }).catch(error => alert("ファイル取得エラー: " + error.message));
-        }
-
-        // ファイルURL取得
-        function getFileURL() {
-            const fileName = document.getElementById("fileName").value.trim();
-            if (!fileName) return alert("ファイル名を入力してください");
-
-            const user = auth.currentUser;
-            if (!user) return alert("ログインしてください");
-
-            const fileRef = ref(storage, `uploads/${user.uid}/${fileName}`);
-            getDownloadURL(fileRef).then(url => {
-                window.open(url, "_blank");
-            }).catch(error => alert("ファイルが見つかりません: " + error.message));
-        }
     </script>
 </body>
 </html>
