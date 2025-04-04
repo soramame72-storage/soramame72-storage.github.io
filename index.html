@@ -60,33 +60,71 @@
         const fileList = document.getElementById("fileList");
         const status = document.getElementById("status");
 
+        // 新規登録ボタンのクリックイベント
         document.getElementById("registerBtn").addEventListener("click", async () => {
-            const username = document.getElementById("username").value;
+            const username = document.getElementById("username").value.trim();
             const password = document.getElementById("password").value;
+
+            if (!username || !password) {
+                authStatus.innerText = "ユーザー名とパスワードを入力してください。";
+                return;
+            }
+
+            const email = `${username}@example.com`; // 内部的に使う用
+
             try {
-                const userCredential = await createUserWithEmailAndPassword(auth, username + "@example.com", password);
-                await setDoc(doc(db, "users", userCredential.user.uid), { username, files: [] });
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+                // メインユーザーデータ
+                await setDoc(doc(db, "users", userCredential.user.uid), {
+                    username,
+                    email,
+                    files: []
+                });
+
+                // ユーザー名とメールの紐付け
+                await setDoc(doc(db, "usernames", username), {
+                    email
+                });
+
                 authStatus.innerText = "登録完了！ログインしてください。";
             } catch (error) {
                 authStatus.innerText = "エラー: " + error.message;
             }
         });
 
+        // ログインボタンのクリックイベント
         document.getElementById("loginBtn").addEventListener("click", async () => {
-            const username = document.getElementById("username").value;
+            const username = document.getElementById("username").value.trim();
             const password = document.getElementById("password").value;
+
+            if (!username || !password) {
+                authStatus.innerText = "ユーザー名とパスワードを入力してください。";
+                return;
+            }
+
             try {
-                const userCredential = await signInWithEmailAndPassword(auth, username + "@example.com", password);
+                // Firestore から username に一致するユーザーの email を取得
+                const usersRef = await getDoc(doc(db, "usernames", username));
+                if (!usersRef.exists()) {
+                    authStatus.innerText = "そのユーザー名は登録されていません。";
+                    return;
+                }
+                const { email } = usersRef.data();
+
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 authStatus.innerText = "ログイン成功！";
             } catch (error) {
                 authStatus.innerText = "エラー: " + error.message;
             }
         });
 
+        // ログアウトボタンのクリックイベント
         document.getElementById("logoutBtn").addEventListener("click", async () => {
             await signOut(auth);
         });
 
+        // アップロードボタンのクリックイベント
         document.getElementById("uploadBtn").addEventListener("click", async () => {
             const fileUrl = document.getElementById("fileUrl").value;
             status.innerText = "アップロード中...";
@@ -121,6 +159,7 @@
             }
         });
 
+        // ユーザーのファイルを読み込む
         async function loadUserFiles(userId) {
             const userDoc = await getDoc(doc(db, "users", userId));
             if (userDoc.exists()) {
@@ -134,6 +173,7 @@
             }
         }
 
+        // 認証状態の変化を監視
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 authPage.classList.add("hidden");
@@ -144,7 +184,6 @@
                 uploadPage.classList.add("hidden");
             }
         });
-
     </script>
 </body>
 </html>
