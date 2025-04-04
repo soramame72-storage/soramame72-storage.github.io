@@ -9,17 +9,8 @@
     </style>
 </head>
 <body>
-    <!-- ログイン / 新規登録 画面 -->
-    <div id="authPage">
-        <h1>ログイン / 新規登録</h1>
-        <input type="text" id="username" placeholder="ユーザー名">
-        <input type="password" id="password" placeholder="パスワード">
-        <button id="registerBtn">新規登録</button>
-        <button id="loginBtn">ログイン</button>
-    </div>
-
     <!-- ファイルアップロード画面 -->
-    <div id="uploadPage" class="hidden">
+    <div id="uploadPage">
         <h1>ファイルアップローダー</h1>
         <button id="logoutBtn">ログアウト</button>
         
@@ -34,8 +25,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // Firebase 設定
         const firebaseConfig = {
@@ -51,65 +42,6 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth();
         const db = getFirestore();
-
-        // 新規登録ボタンのクリックイベント
-        document.getElementById("registerBtn").addEventListener("click", async () => {
-            const username = document.getElementById("username").value.trim();
-            const password = document.getElementById("password").value;
-
-            if (!username || !password) {
-                alert("ユーザー名とパスワードを入力してください。");
-                return;
-            }
-
-            const email = `${username}@example.com`; // 内部的に使う用
-
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-
-                // メインユーザーデータ
-                await setDoc(doc(db, "users", userCredential.user.uid), {
-                    username,
-                    email,
-                    files: []
-                });
-
-                // ユーザー名とメールの紐付け
-                await setDoc(doc(db, "usernames", username), {
-                    email
-                });
-
-                alert("登録完了！ログインしてください。");
-            } catch (error) {
-                alert("エラー: " + error.message);
-            }
-        });
-
-        // ログインボタンのクリックイベント
-        document.getElementById("loginBtn").addEventListener("click", async () => {
-            const username = document.getElementById("username").value.trim();
-            const password = document.getElementById("password").value;
-
-            if (!username || !password) {
-                alert("ユーザー名とパスワードを入力してください。");
-                return;
-            }
-
-            try {
-                // Firestore から username に一致するユーザーの email を取得
-                const usersRef = await getDoc(doc(db, "usernames", username));
-                if (!usersRef.exists()) {
-                    alert("そのユーザー名は登録されていません。");
-                    return;
-                }
-                const { email } = usersRef.data();
-
-                const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                alert("ログイン成功！");
-            } catch (error) {
-                alert("エラー: " + error.message);
-            }
-        });
 
         // ログアウトボタンのクリックイベント
         document.getElementById("logoutBtn").addEventListener("click", async () => {
@@ -169,12 +101,9 @@
         // 認証状態の変化を監視
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                document.getElementById("authPage").classList.add("hidden");
-                document.getElementById("uploadPage").classList.remove("hidden");
                 loadUserFiles(user.uid);
             } else {
-                document.getElementById("authPage").classList.remove("hidden");
-                document.getElementById("uploadPage").classList.add("hidden");
+                alert("ログインしてください。");
             }
         });
     </script>
