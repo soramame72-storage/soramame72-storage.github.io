@@ -9,8 +9,17 @@
     </style>
 </head>
 <body>
+    <!-- ログイン画面 -->
+    <div id="loginPage">
+        <h1>ログイン</h1>
+        <input type="email" id="email" placeholder="メールアドレス">
+        <input type="password" id="password" placeholder="パスワード">
+        <button id="loginBtn">ログイン</button>
+        <p id="loginStatus"></p>
+    </div>
+
     <!-- ファイルアップロード画面 -->
-    <div id="uploadPage">
+    <div id="uploadPage" class="hidden">
         <h1>ファイルアップローダー</h1>
         
         <h2>ファイルを選択してアップロード</h2>
@@ -24,7 +33,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // Firebase 設定
@@ -42,6 +51,18 @@
         const auth = getAuth();
         const db = getFirestore();
 
+        // ログインボタンのクリックイベント
+        document.getElementById("loginBtn").addEventListener("click", async () => {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                document.getElementById("loginStatus").innerText = "ログイン成功！";
+            } catch (error) {
+                document.getElementById("loginStatus").innerText = "エラー: " + error.message;
+            }
+        });
+
         // アップロードボタンのクリックイベント
         document.getElementById("uploadBtn").addEventListener("click", async () => {
             const fileInput = document.getElementById("fileInput");
@@ -57,7 +78,10 @@
             try {
                 const user = auth.currentUser;
                 if (!user) {
+                    // ログインしていない場合はログインページを表示
                     alert("ログインしてください。");
+                    document.getElementById("loginPage").classList.remove("hidden");
+                    document.getElementById("uploadPage").classList.add("hidden");
                     return;
                 }
 
@@ -65,7 +89,6 @@
                 const formData = new FormData();
                 formData.append("file", file);
 
-                // GoFileのAPIでアップロード
                 const serverRes = await fetch("https://api.gofile.io/getServer");
                 const { data } = await serverRes.json();
                 const uploadUrl = `https://${data.server}.gofile.io/uploadFile`;
@@ -111,9 +134,12 @@
         // 認証状態の変化を監視
         onAuthStateChanged(auth, (user) => {
             if (user) {
+                document.getElementById("loginPage").classList.add("hidden");
+                document.getElementById("uploadPage").classList.remove("hidden");
                 loadUserFiles(user.uid);
             } else {
-                alert("ログインしてください。");
+                document.getElementById("loginPage").classList.remove("hidden");
+                document.getElementById("uploadPage").classList.add("hidden");
             }
         });
     </script>
