@@ -16,7 +16,6 @@
         <input type="password" id="password" placeholder="パスワード">
         <button id="registerBtn">新規登録</button>
         <button id="loginBtn">ログイン</button>
-        <p id="authStatus"></p>
     </div>
 
     <!-- ファイルアップロード画面 -->
@@ -53,20 +52,13 @@
         const auth = getAuth();
         const db = getFirestore();
 
-        // 要素取得
-        const authPage = document.getElementById("authPage");
-        const uploadPage = document.getElementById("uploadPage");
-        const authStatus = document.getElementById("authStatus");
-        const fileList = document.getElementById("fileList");
-        const status = document.getElementById("status");
-
         // 新規登録ボタンのクリックイベント
         document.getElementById("registerBtn").addEventListener("click", async () => {
             const username = document.getElementById("username").value.trim();
             const password = document.getElementById("password").value;
 
             if (!username || !password) {
-                authStatus.innerText = "ユーザー名とパスワードを入力してください。";
+                alert("ユーザー名とパスワードを入力してください。");
                 return;
             }
 
@@ -87,9 +79,9 @@
                     email
                 });
 
-                authStatus.innerText = "登録完了！ログインしてください。";
+                alert("登録完了！ログインしてください。");
             } catch (error) {
-                authStatus.innerText = "エラー: " + error.message;
+                alert("エラー: " + error.message);
             }
         });
 
@@ -99,7 +91,7 @@
             const password = document.getElementById("password").value;
 
             if (!username || !password) {
-                authStatus.innerText = "ユーザー名とパスワードを入力してください。";
+                alert("ユーザー名とパスワードを入力してください。");
                 return;
             }
 
@@ -107,15 +99,15 @@
                 // Firestore から username に一致するユーザーの email を取得
                 const usersRef = await getDoc(doc(db, "usernames", username));
                 if (!usersRef.exists()) {
-                    authStatus.innerText = "そのユーザー名は登録されていません。";
+                    alert("そのユーザー名は登録されていません。");
                     return;
                 }
                 const { email } = usersRef.data();
 
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                authStatus.innerText = "ログイン成功！";
+                alert("ログイン成功！");
             } catch (error) {
-                authStatus.innerText = "エラー: " + error.message;
+                alert("エラー: " + error.message);
             }
         });
 
@@ -127,7 +119,7 @@
         // アップロードボタンのクリックイベント
         document.getElementById("uploadBtn").addEventListener("click", async () => {
             const fileUrl = document.getElementById("fileUrl").value;
-            status.innerText = "アップロード中...";
+            document.getElementById("status").innerText = "アップロード中...";
 
             try {
                 const response = await fetch(fileUrl);
@@ -150,12 +142,12 @@
                         });
                         loadUserFiles(user.uid);
                     }
-                    status.innerHTML = `アップロード完了！<br><a href="${result.data.downloadPage}" target="_blank">ダウンロードリンク</a>`;
+                    alert(`アップロード完了！\nダウンロードリンク: ${result.data.downloadPage}`);
                 } else {
-                    status.innerText = "アップロード失敗";
+                    alert("アップロード失敗");
                 }
             } catch (error) {
-                status.innerText = "エラーが発生しました";
+                alert("エラーが発生しました");
             }
         });
 
@@ -164,6 +156,7 @@
             const userDoc = await getDoc(doc(db, "users", userId));
             if (userDoc.exists()) {
                 const files = userDoc.data().files;
+                const fileList = document.getElementById("fileList");
                 fileList.innerHTML = "";
                 files.forEach(file => {
                     const li = document.createElement("li");
@@ -176,12 +169,12 @@
         // 認証状態の変化を監視
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                authPage.classList.add("hidden");
-                uploadPage.classList.remove("hidden");
+                document.getElementById("authPage").classList.add("hidden");
+                document.getElementById("uploadPage").classList.remove("hidden");
                 loadUserFiles(user.uid);
             } else {
-                authPage.classList.remove("hidden");
-                uploadPage.classList.add("hidden");
+                document.getElementById("authPage").classList.remove("hidden");
+                document.getElementById("uploadPage").classList.add("hidden");
             }
         });
     </script>
