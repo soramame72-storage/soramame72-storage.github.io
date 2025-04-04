@@ -12,10 +12,9 @@
     <!-- ファイルアップロード画面 -->
     <div id="uploadPage">
         <h1>ファイルアップローダー</h1>
-        <button id="logoutBtn">ログアウト</button>
         
-        <h2>アップロード</h2>
-        <input type="text" id="fileUrl" value="https://soramame72-storage.github.io/sample.jpg" size="50">
+        <h2>ファイルを選択してアップロード</h2>
+        <input type="file" id="fileInput">
         <button id="uploadBtn">アップロード開始</button>
         <p id="status"></p>
 
@@ -25,7 +24,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // Firebase 設定
@@ -43,22 +42,30 @@
         const auth = getAuth();
         const db = getFirestore();
 
-        // ログアウトボタンのクリックイベント
-        document.getElementById("logoutBtn").addEventListener("click", async () => {
-            await signOut(auth);
-        });
-
         // アップロードボタンのクリックイベント
         document.getElementById("uploadBtn").addEventListener("click", async () => {
-            const fileUrl = document.getElementById("fileUrl").value;
+            const fileInput = document.getElementById("fileInput");
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("ファイルを選択してください。");
+                return;
+            }
+
             document.getElementById("status").innerText = "アップロード中...";
 
             try {
-                const response = await fetch(fileUrl);
-                const blob = await response.blob();
-                const formData = new FormData();
-                formData.append("file", blob, "uploaded_file.jpg");
+                const user = auth.currentUser;
+                if (!user) {
+                    alert("ログインしてください。");
+                    return;
+                }
 
+                // GoFileにファイルをアップロード
+                const formData = new FormData();
+                formData.append("file", file);
+
+                // GoFileのAPIでアップロード
                 const serverRes = await fetch("https://api.gofile.io/getServer");
                 const { data } = await serverRes.json();
                 const uploadUrl = `https://${data.server}.gofile.io/uploadFile`;
@@ -67,19 +74,22 @@
                 const result = await goFileResponse.json();
 
                 if (result.status === "ok") {
-                    const user = auth.currentUser;
-                    if (user) {
-                        await updateDoc(doc(db, "users", user.uid), {
-                            files: arrayUnion(result.data.downloadPage)
-                        });
-                        loadUserFiles(user.uid);
-                    }
-                    alert(`アップロード完了！\nダウンロードリンク: ${result.data.downloadPage}`);
+                    const fileUrl = result.data.downloadPage;
+
+                    // FirestoreにファイルのURLを保存
+                    await updateDoc(doc(db, "users", user.uid), {
+                        files: arrayUnion(fileUrl)
+                    });
+
+                    // アップロード済みファイルリストを更新
+                    loadUserFiles(user.uid);
+
+                    alert(`アップロード完了！\nダウンロードリンク: ${fileUrl}`);
                 } else {
                     alert("アップロード失敗");
                 }
             } catch (error) {
-                alert("エラーが発生しました");
+                alert("エラーが発生しました: " + error.message);
             }
         });
 
